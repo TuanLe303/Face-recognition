@@ -5,26 +5,21 @@ import numpy as np
 from dotenv import load_dotenv
 from insightface.app import FaceAnalysis
 import threading
+import time
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
-# ==========================================
-# KHỞI TẠO MODEL
-# ==========================================
+
 app = FaceAnalysis(name='buffalo_l', allowed_modules=['detection', 'recognition'], providers=['CUDAExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(640, 640))
 
-# ==========================================
-# BƯỚC 2.1: TẢI DATABASE VÀO RAM
-# ==========================================
+
 DB_PATH     = r"C:\1MATERIAL\3LHMT\FPT\CPV301\assignment\db\face_db.pkl"
 DATASET_DIR = r"C:\1MATERIAL\3LHMT\FPT\CPV301\assignment\dataset"
 with open(DB_PATH, "rb") as f:
     database_vectors: dict = pickle.load(f)
 print(f"Đã tải database: {list(database_vectors.keys())}")
 
-# ==========================================
-# BƯỚC 2.2: HÀM COSINE SIMILARITY
-# ==========================================
+
 def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
     """Tính độ tương đồng cosine giữa 2 vector. Kết quả trong [-1, 1], càng gần 1 càng giống."""
     dot   = np.dot(vec_a, vec_b)
@@ -33,9 +28,7 @@ def cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
 
 THRESHOLD = 0.45
 
-# ==========================================
-# CẤU HÌNH CHẾ ĐỘ ĐĂNG KÝ NGƯỜI MỚI
-# ==========================================
+
 ANGLE_PROMPTS = [
     "Buoc 1/5: Nhin THANG vao camera",
     "Buoc 2/5: Quay mat sang TRAI",
@@ -76,7 +69,7 @@ class RTSPVideoStream:
             (self.grabbed, self.frame) = self.stream.read()
 
     def read(self):
-        # Trả về tuple (ret, frame) để tương thích 100% với code hiện tại của bạn
+
         return (self.grabbed, self.frame)
 
     def isOpened(self):
@@ -103,6 +96,9 @@ print("He thong dang chay...")
 print("  Nhan 'n' de dang ky nguoi moi")
 print("  Nhan 'q' de thoat")
 
+prev_time = time.time()
+frame_count = 0
+faces = []
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -112,12 +108,17 @@ while True:
     frame = cv2.resize(frame, (720, 1280))
 
     display = frame.copy()
+    curr_time = time.time()
+    fps = 1.0 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
+    prev_time = curr_time
 
-    # ==========================================
-    # CHE DO NHAN DIEN BINH THUONG
-    # ==========================================
+    cv2.putText(display, f"FPS: {int(fps)}", (display.shape[1] - 120, 35), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    
     if mode == MODE_RECOGNITION:
-        faces = app.get(frame)
+        frame_count += 1
+        if frame_count % 3 == 0:
+            faces = app.get(frame)
         for face in faces:
             bbox = face.bbox.astype(int)
             current_embedding = face.embedding
@@ -146,16 +147,14 @@ while True:
                     (10, display.shape[0] - 15),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
 
-    # ==========================================
-    # CHE DO DANG KY NGUOI MOI
-    # ==========================================
+
     elif mode == MODE_ENROLLMENT:
         faces = app.get(frame)
         for face in faces:
             bbox = face.bbox.astype(int)
             cv2.rectangle(display, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 215, 255), 2)
 
-        # Thanh thong bao nền tối phía trên
+
         overlay = display.copy()
         cv2.rectangle(overlay, (0, 0), (display.shape[1], 135), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.55, display, 0.45, 0, display)
@@ -165,7 +164,7 @@ while True:
         cv2.putText(display, ANGLE_PROMPTS[enrollment_step],
                     (10, 78), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
 
-        # Các chấm tiến trình (progress dots)
+
         for i in range(5):
             clr = (0, 220, 0) if i < enrollment_step else (70, 70, 70)
             cv2.circle(display, (20 + i * 35, 115), 12, clr, -1)
@@ -179,14 +178,12 @@ while True:
     cv2.imshow("Face Recognition", display)
     key = cv2.waitKey(1) & 0xFF
 
-    # ==========================================
-    # XU LY PHIM BAM
-    # ==========================================
+
     if key == ord('q'):
         break
 
     elif key == ord('n') and mode == MODE_RECOGNITION:
-        # Hien thi thong bao tren man hinh roi hoi ten qua terminal
+
         msg_frame = display.copy()
         cv2.putText(msg_frame, "Nhap ten/Ma SV trong terminal...",
                     (10, display.shape[0] // 2),
@@ -217,7 +214,7 @@ while True:
             embedding = face.embedding
             enrollment_embeddings.append(embedding)
 
-            # Luu anh goc vao dataset/<ten>/ de backup
+
             person_dir = os.path.join(DATASET_DIR, enrollment_name)
             os.makedirs(person_dir, exist_ok=True)
             img_path = os.path.join(person_dir, f"angle_{enrollment_step}.jpg")
@@ -226,7 +223,7 @@ while True:
             print(f"[OK] Goc {enrollment_step + 1}/5 - Da luu: {img_path}")
             enrollment_step += 1
 
-            # Flash vien xanh bao da chup thanh cong
+
             flash = display.copy()
             cv2.rectangle(flash, (0, 0), (flash.shape[1], flash.shape[0]), (0, 255, 0), 10)
             cv2.putText(flash, "Da chup!",
@@ -236,13 +233,13 @@ while True:
             cv2.waitKey(700)
 
             if enrollment_step >= 5:
-                # Cap nhat RAM va luu file pkl
+
                 database_vectors[enrollment_name] = enrollment_embeddings
                 save_database()
                 print(f"\n[THANH CONG] Da dang ky '{enrollment_name}' voi {len(enrollment_embeddings)} embedding.")
                 print(f"[INFO] Database hien tai: {list(database_vectors.keys())}")
 
-                # Thong bao hoan thanh tren man hinh
+
                 done_frame = frame.copy()
                 cv2.putText(done_frame, f"Dang ky thanh cong: {enrollment_name}",
                             (10, done_frame.shape[0] // 2 - 20),
@@ -253,19 +250,19 @@ while True:
                 cv2.imshow("Face Recognition", done_frame)
                 cv2.waitKey(2000)
 
-                # Reset ve che do nhan dien
+
                 mode                  = MODE_RECOGNITION
                 enrollment_name       = ""
                 enrollment_embeddings = []
                 enrollment_step       = 0
 
-    elif key == 27 and mode == MODE_ENROLLMENT:  # ESC
+    elif key == 27 and mode == MODE_ENROLLMENT:  
         print("[HUY] Da huy dang ky.")
         mode                  = MODE_RECOGNITION
         enrollment_name       = ""
         enrollment_embeddings = []
         enrollment_step       = 0
 
-# Don dep bo nho khi ket thuc
+
 cap.stop()
 cv2.destroyAllWindows()
