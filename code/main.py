@@ -78,8 +78,9 @@ class RTSPVideoStream:
     def stop(self):
         self.stopped = True
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", "url"))
-rtsp_url = os.getenv("RTSP_URL", "0")
+# load_dotenv(os.path.join(os.path.dirname(__file__), "..", "url"))
+# rtsp_url = os.getenv("RTSP_URL", "0")
+rtsp_url = 0
 if rtsp_url == "0":
     rtsp_url = 0
     print("using laptop_cam")
@@ -104,19 +105,21 @@ while True:
     if not ret:
         print("Canh bao: Mat tin hieu tu camera.")
         break
-    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    frame = cv2.resize(frame, (720, 1280))
+    # frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    frame = cv2.resize(frame, (1920,1080))
+    frame = cv2.flip(frame, 1)  # Fix mirror effect (webcam horizontal flip)
 
     display = frame.copy()
     curr_time = time.time()
     fps = 1.0 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
     prev_time = curr_time
 
-    cv2.putText(display, f"FPS: {int(fps)}", (display.shape[1] - 120, 35), 
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+    cv2.rectangle(display, (5, 5), (130, 45), (0, 0, 0), -1)
+    cv2.putText(display, f"FPS: {int(fps)}", (10, 35),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
     
+    frame_count += 1
     if mode == MODE_RECOGNITION:
-        frame_count += 1
         if frame_count % 3 == 0:
             faces = app.get(frame)
         for face in faces:
@@ -149,10 +152,21 @@ while True:
 
 
     elif mode == MODE_ENROLLMENT:
-        faces = app.get(frame)
-        for face in faces:
+        if frame_count % 3 == 0:
+            faces = app.get(frame)
+        # Chọn khuôn mặt lớn nhất (gần camera nhất) để đăng ký
+        selected_face_idx = -1
+        if faces:
+            areas = [(f.bbox[2]-f.bbox[0])*(f.bbox[3]-f.bbox[1]) for f in faces]
+            selected_face_idx = int(np.argmax(areas))
+        for i, face in enumerate(faces):
             bbox = face.bbox.astype(int)
-            cv2.rectangle(display, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 215, 255), 2)
+            if i == selected_face_idx:
+                cv2.rectangle(display, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 215, 255), 3)
+                cv2.putText(display, "[DANG KY]", (bbox[0], bbox[3] + 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 215, 255), 2)
+            else:
+                cv2.rectangle(display, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (100, 100, 100), 1)
 
 
         overlay = display.copy()
@@ -210,7 +224,9 @@ while True:
         if not faces:
             print("[CANH BAO] Khong phat hien khuon mat! Hay chinh lai vi tri va bam 'c' lai.")
         else:
-            face      = faces[0]
+            # Luôn lấy khuôn mặt lớn nhất (gần camera nhất)
+            areas = [(f.bbox[2]-f.bbox[0])*(f.bbox[3]-f.bbox[1]) for f in faces]
+            face      = faces[int(np.argmax(areas))]
             embedding = face.embedding
             enrollment_embeddings.append(embedding)
 
