@@ -42,9 +42,6 @@ IMG_EXTS        = {".jpg", ".jpeg", ".png", ".bmp"}
 
 # ─────────── Pre-processing ────────────────────────────────────
 def preprocess(img: np.ndarray) -> np.ndarray:
-    """Light pre-processing applied before face detection.
-    - Gaussian blur (3×3) to reduce camera/compression noise.
-    - Min-max normalization to balance brightness/contrast."""
     img = cv2.GaussianBlur(img, (3, 3), 0)
     img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
     return img
@@ -52,9 +49,6 @@ def preprocess(img: np.ndarray) -> np.ndarray:
 
 # ─────────── Main logic ────────────────────────────────────────
 def build_database(dataset_dir: str, db_path: str) -> None:
-    """Scan dataset_dir for person sub-folders, extract face embeddings,
-    and save the resulting database to db_path."""
-
     if not os.path.isdir(dataset_dir):
         print(f"[ERROR] Dataset folder not found: {dataset_dir}")
         print("        Create it and add sub-folders for each person.")
@@ -99,7 +93,6 @@ def build_database(dataset_dir: str, db_path: str) -> None:
 
             total_images += 1
 
-            # Pre-process → detect → extract embedding
             img   = preprocess(img)
             faces = model.get(img)
 
@@ -112,12 +105,10 @@ def build_database(dataset_dir: str, db_path: str) -> None:
             total_faces += 1
             print(f"  [OK]   {fname}")
 
-    # Save database
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     with open(db_path, "wb") as f:
         pickle.dump(face_db, f)
 
-    # Summary
     print("\n" + "=" * 50)
     print(f"  Database saved to : {db_path}")
     print(f"  People            : {len(face_db)}")

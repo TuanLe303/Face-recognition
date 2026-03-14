@@ -32,8 +32,7 @@ THRESHOLD   = 0.5
 IMG_EXTS    = {".jpg", ".jpeg", ".png", ".bmp"}
 
 # How often to run face detection (every Nth frame).
-# Higher = faster FPS but less responsive detection.
-DETECT_EVERY_N = 5
+DETECT_EVERY_N = 3
 
 ANGLE_PROMPTS = [
     "Step 1/5: Look **directly** into the camera",
@@ -54,12 +53,10 @@ def preprocess(img: np.ndarray) -> np.ndarray:
     return img
 
 
-# ───────────────────────── Streamlit setup ─────────────────────
 st.set_page_config(page_title="Face Recognition", layout="wide")
 
 @st.cache_resource
 def load_model():
-    """Load InsightFace model once, cached across Streamlit reruns."""
     model = FaceAnalysis(
         name="buffalo_l",
         allowed_modules=["detection", "recognition"],
@@ -124,10 +121,10 @@ capture_clicked = False
 
 # ───────────────────────── Sidebar ─────────────────────────────
 with st.sidebar:
-    st.title("🎓 Face Recognition")
+    st.title("Face Recognition")
 
     if st.session_state.mode == "recognition":
-        st.success(f"Recognition mode – {len(st.session_state.database)} people registered")
+        st.success(f"Recognition mode \n {len(st.session_state.database)} people registered")
 
         # --- Enrollment ---
         name_input  = st.text_input("Name / Student ID")
@@ -135,9 +132,9 @@ with st.sidebar:
 
         if name_exists:
             st.warning(f"**{name_input.strip()}** already registered.")
-            start = st.button("Re-enroll", use_container_width=True)
+            start = st.button("Re-enroll",width='stretch')
         else:
-            start = st.button("Start Enrollment", use_container_width=True)
+            start = st.button("Start Enrollment",width='stretch')
 
         if start and name_input.strip():
             st.session_state.mode = "enrollment"
@@ -156,13 +153,13 @@ with st.sidebar:
                     st.write(f"• {n}  ({len(st.session_state.database[n])} imgs)")
 
         d1, d2 = st.columns(2)
-        if d1.button("Reset DB", use_container_width=True):
+        if d1.button("Reset DB",width='stretch'):
             st.session_state.database = {}
             save_database()
             rebuild_index()
             st.rerun()
 
-        if d2.button("Retrain", use_container_width=True):
+        if d2.button("Retrain",width='stretch'):
             st.session_state.mode = "retraining"
             st.rerun()
 
@@ -173,8 +170,8 @@ with st.sidebar:
             st.info(ANGLE_PROMPTS[st.session_state.enroll_step])
 
         c1, c2 = st.columns(2)
-        capture_clicked = c1.button("📸 Capture", use_container_width=True)
-        if c2.button("Cancel", use_container_width=True):
+        capture_clicked = c1.button("📸 Capture",width='stretch')
+        if c2.button("Cancel", width='stretch'):
             st.session_state.mode = "recognition"
             st.rerun()
 
@@ -245,14 +242,11 @@ while True:
     small   = cv2.resize(frame, (640, 480))
     display = small.copy()
 
-    # Run detection only every Nth frame for performance.
-    # Pre-process only on detection frames to save CPU.
     frame_count += 1
     if frame_count % DETECT_EVERY_N == 0:
         processed = preprocess(small)
         faces = model.get(processed)
 
-    # ---- Recognition mode ----
     if st.session_state.mode == "recognition":
         db_mat = st.session_state.db_matrix
         db_nm  = st.session_state.db_names
@@ -278,9 +272,7 @@ while True:
             cv2.putText(display, label, (bbox[0], bbox[1] - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    # ---- Enrollment mode ----
     elif st.session_state.mode == "enrollment":
-        # Highlight the largest (closest) face for enrollment
         if faces:
             areas = [(f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]) for f in faces]
             sel = int(np.argmax(areas))
@@ -304,7 +296,6 @@ while True:
                 face  = faces_now[int(np.argmax(areas))]
                 st.session_state.enroll_embeddings.append(face.embedding)
 
-                # Save the original (non-processed) frame as enrollment image
                 person_dir = os.path.join(DATASET_DIR, st.session_state.enroll_name)
                 os.makedirs(person_dir, exist_ok=True)
                 cv2.imwrite(
@@ -327,6 +318,5 @@ while True:
 
                 st.rerun()
 
-    # Encode frame as JPEG and send to browser
     _, jpg = cv2.imencode(".jpg", display, [cv2.IMWRITE_JPEG_QUALITY, 50])
-    frame_placeholder.image(jpg.tobytes(), use_container_width=True)
+    frame_placeholder.image(jpg.tobytes(), width='stretch')
