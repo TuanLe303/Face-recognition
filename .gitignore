@@ -1,19 +1,5 @@
-# Dataset images (only keep folder structure)
 dataset/**
 !dataset/.gitkeep
-
-# Database
 db/*.pkl
-
-# Python
+db/*.json
 __pycache__/
-*.pyc
-*.pyo
-
-# IDE / Editor
-.vscode/
-.idea/
-
-# Misc
-grp2
-url

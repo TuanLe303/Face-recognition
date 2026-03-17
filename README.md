@@ -1,175 +1,155 @@
-# 🎓 Face Recognition System
+# CPV301 Face Recognition Attendance System
 
-A real-time face recognition system built with [InsightFace](https://github.com/deepinsight/insightface) (buffalo_l) for face detection & recognition, powered by a Streamlit web UI.
-
-## Features
-
-| Feature | Description |
-|---------|-------------|
-| **RTSP / Webcam streaming** | Supports both IP cameras (RTSP) and local webcams |
-| **Face detection** | RetinaFace detector via InsightFace (`det_10g`) |
-| **Face recognition** | ArcFace embeddings with cosine similarity matching |
-| **Pre-processing** | CLAHE (Contrast Limited Adaptive Histogram Equalization) on LAB's L-channel |
-| **Live enrollment** | Register new faces from 5 angles directly through the UI |
-| **Database management** | Reset, retrain, and view registered faces from the sidebar |
-| **Performance** | Frame skipping for real-time speed (`DETECT_EVERY_N=3`) |
+Real-time face recognition attendance system for class CPV301 using [InsightFace](https://github.com/deepinsight/insightface) (buffalo_l) with a Streamlit web UI.
 
 ## How It Works
 
 ```
 Camera Frame
-     │
-     ▼
-┌──────────────────────────────────────────────────────────┐
-│  1. Pre-processing                                       │
-│     CLAHE (Contrast Limited Adaptive Histogram           │
-│     Equalization) on LAB's L-channel → local contrast    │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│  2. Face Detection — RetinaFace (det_10g)                │
-│     Input: full frame → Output: bounding boxes +         │
-│     5 facial keypoints (eyes, nose, mouth corners)       │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│  3. Face Recognition — ArcFace (w600k_r50)               │
-│     Input: aligned face crop → Output: 512-d embedding   │
-│     (trained on 600K identities)                         │
-└────────────────────────┬─────────────────────────────────┘
-                         │
-                         ▼
-┌──────────────────────────────────────────────────────────┐
-│  4. Matching — Vectorized cosine similarity              │
-│     query (1×512) @ database (N×512)ᵀ = scores (1×N)     │
-│     If max(score) ≥ 0.5 → recognized                    │
-└──────────────────────────────────────────────────────────┘
+     |
+     v
++---------------------------------------------+
+|  Pre-processing                             |
+|  Gaussian blur 5x5 -> noise reduction       |
+|  CLAHE on LAB L-channel -> fix lighting     |
++---------------------+-----------------------+
+                      v
++---------------------------------------------+
+|  RetinaFace (det_10g)                       |
+|  Detects faces -> bounding boxes +          |
+|  5 keypoints (eyes, nose, mouth)            |
++---------------------+-----------------------+
+                      v
++---------------------------------------------+
+|  ArcFace (w600k_r50)                        |
+|  Aligned face crop -> 512-dim embedding     |
+|  Trained on 600K identities                 |
++---------------------+-----------------------+
+                      v
++---------------------------------------------+
+|  Matching                                   |
+|  query (1x512) @ database (Nx512)^T         |
+|  = cosine similarity scores                 |
+|  max(score) >= 0.5 -> recognized            |
++---------------------------------------------+
+                      v
++---------------------------------------------+
+|  Attendance Logging                         |
+|  Auto-logs student for today's session      |
+|  >4 absences out of 20 sessions = FAILED    |
++---------------------------------------------+
 ```
 
-Both models are bundled in InsightFace's **buffalo_l** model pack and run via ONNX Runtime (GPU or CPU).
+Both models are bundled in InsightFace's **buffalo_l** pack and run via ONNX Runtime (GPU or CPU).
 
 ## Project Structure
 
 ```
 Face-recognition/
 ├── code/
-│   ├── app.py              # Streamlit web app (main application)
-│   └── create_db.py        # CLI tool to build face database from images
-├── dataset/                # Face images (organized by person)
-│   └── <PersonName>/
-│       ├── img1.jpg
-│       └── img2.png
+│   ├── app.py           # Streamlit attendance app
+│   ├── create_db.py     # CLI: build face database from images
+│   └── compare.py       # CLI: before/after CLAHE comparison
+├── dataset/             # Face images organized by student ID
+│   ├── HE200666/
+│   │   ├── angle_0.jpg
+│   │   └── angle_1.jpg
+│   └── HE200777/
+│       └── photo1.jpg
 ├── db/
-│   └── face_db.pkl         # Face embedding database (auto-generated)
+│   ├── face_db.pkl      # Face embeddings (auto-generated)
+│   ├── students.json    # Student info (auto-generated)
+│   └── attendance.json  # Attendance records (auto-generated)
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
 ## Setup
 
-### 1. Clone the repository
+### 1. Clone and create environment
 
 ```bash
 git clone https://github.com/<your-username>/Face-recognition.git
 cd Face-recognition
+
+conda create -n facerec python=3.10 -y
+conda activate facerec
 ```
 
-### 2. Create a Python environment
-
-```bash
-# Using conda
-conda create -n face-recognition python=3.10 -y
-conda activate face-recognition
-
-# Or using venv
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Linux/Mac
-```
-
-### 3. Install dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> **GPU support (optional):** If you have an NVIDIA GPU with CUDA 12, install `onnxruntime-gpu` instead of `onnxruntime` for faster inference:
-> ```bash
-> pip install onnxruntime-gpu
-> ```
+> For GPU: `pip install onnxruntime-gpu` (requires CUDA 12)
 
-### 4. Prepare the dataset
-
-Add face images in the `dataset/` folder with the following structure:
-
-```
-dataset/
-├── John_Doe/
-│   ├── photo1.jpg
-│   ├── photo2.jpg
-│   └── photo3.png
-├── Jane_Smith/
-│   ├── img1.jpg
-│   └── img2.jpg
-└── ...
-```
-
-- Each sub-folder name = the person's name or student ID
-- At least 1 image per person (more images = better accuracy)
-- Supported formats: `.jpg`, `.jpeg`, `.png`, `.bmp`
-
-### 5. Build the face database
+### 3. (Optional) Pre-build database from images
 
 ```bash
 python code/create_db.py
-```
-
-Options:
-
-```bash
-python code/create_db.py --help
-python code/create_db.py --dataset path/to/custom_dataset
-python code/create_db.py --db path/to/output.pkl
+python code/create_db.py --dataset path/to/images --db path/to/output.pkl
 ```
 
 ## Usage
-
-### Run the web app
 
 ```bash
 streamlit run code/app.py
 ```
 
-This opens a browser window with the live camera feed and sidebar controls.
+### Recognition Mode (default)
 
-### Modes
+Camera detects faces and matches them against the database. Recognized students are automatically logged for today's session.
 
-1. **Recognition mode** (default): Detects faces in the camera feed, matches against the database, and displays the name + confidence score.
+- Green box: `StudentID Name (attended/total)` - attendance logged
+- Red box: `FAILED StudentID Name (attended/total)` - more than 4 absences
 
-2. **Enrollment mode**: Enter a name/student ID, then capture 5 photos at different angles (front, left, right, up, down). Images are saved to `dataset/` and embeddings to the database.
+### Enrollment
 
-3. **Retrain**: Rebuilds the entire database from all images in `dataset/`. Useful after manually adding/removing images.
+1. Enter Full Name (required) and Student ID (required) in the sidebar
+2. Click "Start Enrollment"
+3. Follow the 5-angle prompts and click "Capture" for each
+4. Student is added to the database
+
+### Dashboard
+
+Click "View Dashboard" to see all students with:
+- Sessions attended / missed
+- Attendance rate
+- Status: PASSED or FAILED (>4 absences = FAILED)
+
+### CLAHE Preprocessing
+
+Check "Show CLAHE Preprocessing" in the sidebar to see original vs processed frames side by side.
+
+### Compare Tool (standalone)
+
+```bash
+python code/compare.py
+```
+
+Shows before/after CLAHE in an OpenCV window. Press `q` to quit.
+
+## Attendance Rules
+
+- Class: CPV301
+- Total sessions: 20
+- Maximum allowed absences: 4 (20%)
+- More than 4 absences = automatic FAILED status
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| `ModuleNotFoundError: onnxruntime` | Run `pip install onnxruntime` (or `onnxruntime-gpu` for GPU) |
-| OpenMP `libiomp5md.dll` error | Already handled in code via `KMP_DUPLICATE_LIB_OK=TRUE` |
-| CUDA provider errors | Install CUDA Toolkit 12 + cuDNN, or ignore (falls back to CPU) |
-| Camera not opening | Check that no other app is using the webcam |
-| Low recognition accuracy | Add more enrollment images, ensure good lighting |
+| Problem | Fix |
+|---------|-----|
+| `ModuleNotFoundError: onnxruntime` | `pip install onnxruntime` |
+| `libiomp5md.dll` error | Handled automatically via `KMP_DUPLICATE_LIB_OK` |
+| CUDA errors | Falls back to CPU automatically |
+| Camera not opening | Close other apps using the webcam |
 
 ## Tech Stack
 
-- **Face Detection / Recognition**: [InsightFace](https://github.com/deepinsight/insightface) (buffalo_l – RetinaFace + ArcFace)
-- **Inference**: [ONNX Runtime](https://onnxruntime.ai/) (CPU or CUDA)
-- **Web UI**: [Streamlit](https://streamlit.io/)
-- **Pre-processing**: OpenCV (CLAHE on L-channel of LAB color space)
-
-## License
-
-This project is for educational purposes (FPT University – CPV301).
+- **Detection + Recognition**: InsightFace buffalo_l (RetinaFace + ArcFace)
+- **Inference**: ONNX Runtime (CPU / CUDA)
+- **UI**: Streamlit with JetBrains Mono font
+- **Pre-processing**: OpenCV (Gaussian blur + CLAHE)
+- **Storage**: pickle (embeddings), JSON (students + attendance)
