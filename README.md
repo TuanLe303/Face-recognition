@@ -9,9 +9,10 @@ A real-time face recognition system built with [InsightFace](https://github.com/
 | **RTSP / Webcam streaming** | Supports both IP cameras (RTSP) and local webcams |
 | **Face detection** | RetinaFace detector via InsightFace (`det_10g`) |
 | **Face recognition** | ArcFace embeddings with cosine similarity matching |
-| **Pre-processing** | Gaussian blur denoising + brightness/contrast normalization |
+| **Pre-processing** | CLAHE (Contrast Limited Adaptive Histogram Equalization) on LAB's L-channel |
 | **Live enrollment** | Register new faces from 5 angles directly through the UI |
 | **Database management** | Reset, retrain, and view registered faces from the sidebar |
+| **Performance** | Frame skipping for real-time speed (`DETECT_EVERY_N=3`) |
 
 ## How It Works
 
@@ -21,8 +22,8 @@ Camera Frame
      ▼
 ┌──────────────────────────────────────────────────────────┐
 │  1. Pre-processing                                       │
-│     Gaussian blur (3×3) → denoise                        │
-│     Min-max normalization → balance brightness/contrast  │
+│     CLAHE (Contrast Limited Adaptive Histogram           │
+│     Equalization) on LAB's L-channel → local contrast    │
 └────────────────────────┬─────────────────────────────────┘
                          │
                          ▼
@@ -167,7 +168,7 @@ This opens a browser window with the live camera feed and sidebar controls.
 - **Face Detection / Recognition**: [InsightFace](https://github.com/deepinsight/insightface) (buffalo_l – RetinaFace + ArcFace)
 - **Inference**: [ONNX Runtime](https://onnxruntime.ai/) (CPU or CUDA)
 - **Web UI**: [Streamlit](https://streamlit.io/)
-- **Pre-processing**: OpenCV (Gaussian blur + brightness normalization)
+- **Pre-processing**: OpenCV (CLAHE on L-channel of LAB color space)
 
 ## License
 
