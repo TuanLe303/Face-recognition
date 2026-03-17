@@ -3,7 +3,7 @@ app.py – Streamlit-based Face Recognition System.
 
 Pipeline:
     1. Capture frame from webcam / RTSP stream
-    2. Pre-process  (Gaussian blur denoise + brightness normalization)
+    2. Pre-process  (CLAHE – adaptive contrast enhancement on L channel)
     3. Detect faces (RetinaFace via InsightFace buffalo_l)
     4. Extract 512-d embedding per face (ArcFace)
     5. Match against database via vectorized cosine similarity
@@ -44,13 +44,15 @@ ANGLE_PROMPTS = [
 
 
 # ───────────────────────── Pre-processing ──────────────────────
+_clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
 def preprocess(img: np.ndarray) -> np.ndarray:
-    """Light pre-processing: Gaussian blur (denoise) + brightness/contrast
-    normalization. Applied before face detection for better results
-    under varying lighting conditions."""
-    img = cv2.GaussianBlur(img, (3, 3), 0)
-    img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
-    return img
+    """CLAHE (Contrast Limited Adaptive Histogram Equalization) trên kênh L
+    của không gian LAB. Cân bằng sáng cục bộ mà không bị ảnh hưởng bởi
+    background, tốt hơn min-max normalize toàn frame."""
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    lab[:, :, 0] = _clahe.apply(lab[:, :, 0])
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
 
 st.set_page_config(page_title="Face Recognition", layout="wide")

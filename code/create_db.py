@@ -3,7 +3,7 @@ create_db.py – Build the face-embedding database from a folder of images.
 
 Pipeline (per image):
     1. Read image with OpenCV
-    2. Pre-process  (Gaussian blur denoise + brightness normalization)
+    2. Pre-process  (CLAHE – adaptive contrast enhancement on L channel)
     3. Detect face  (RetinaFace via InsightFace buffalo_l)
     4. Extract 512-d embedding (ArcFace)
     5. Store embedding in a dict keyed by person name
@@ -41,10 +41,14 @@ IMG_EXTS        = {".jpg", ".jpeg", ".png", ".bmp"}
 
 
 # ─────────── Pre-processing ────────────────────────────────────
+_clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
 def preprocess(img: np.ndarray) -> np.ndarray:
-    img = cv2.GaussianBlur(img, (3, 3), 0)
-    img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
-    return img
+    """CLAHE trên kênh L của không gian LAB. Cân bằng sáng cục bộ mà
+    không bị ảnh hưởng bởi background."""
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    lab[:, :, 0] = _clahe.apply(lab[:, :, 0])
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
 
 # ─────────── Main logic ────────────────────────────────────────
