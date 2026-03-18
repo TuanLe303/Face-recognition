@@ -129,6 +129,25 @@ capture = False
 # sidebar
 with st.sidebar:
     st.title("CPV301 Attendance")
+    
+    if "cam_source" not in st.session_state: st.session_state.cam_source = "Laptop Webcam"
+    cam_choice = st.radio("Camera Source", ["Laptop Webcam", "RTSP Camera"], 
+                          index=0 if st.session_state.cam_source == "Laptop Webcam" else 1)
+    if cam_choice != st.session_state.cam_source:
+        st.session_state.cam_source = cam_choice
+        if "cap" in st.session_state: st.session_state.cap.release()
+        src = 0
+        if cam_choice == "RTSP Camera":
+            try:
+                with open(os.path.join(BASE, r"C:\1MATERIAL\3LHMT\FPT\CPV301\assignment\url"), "r") as f:
+                    content = f.read().strip()
+                    src = content.split("=")[1].strip() if "=" in content else content
+            except: pass
+        c = cv2.VideoCapture(src)
+        c.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        st.session_state.cap = c
+        st.rerun()
+
     held = len(st.session_state.att["sessions"])
     st.caption(f"Session {held} / {TOTAL_SESSIONS}")
 
